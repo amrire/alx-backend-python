@@ -89,4 +89,3 @@ python3 -m unittest discover -s 0x03-Unittests_and_integration_tests
 ## Author
 
 This repository is part of the ALX Backend Python curriculum.
-```
