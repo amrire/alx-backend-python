@@ -1,88 +1,41 @@
-# messaging_app/chats/serializers.py
-
-from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import Conversation, Message
 
 User = get_user_model()
 
-
 class UserSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the custom User model.
-    - Adds a write-only CharField for password.
-    - Overrides create() to set the password properly.
-    """
-    password = serializers.CharField(write_only=True)
+    email = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    phone_number = serializers.CharField()
 
     class Meta:
         model = User
-        fields = (
-            'user_id',
-            'username',
-            'email',
-            'first_name',
-            'last_name',
-            'password',
-        )
-
-    def create(self, validated_data):
-        # Remove password from validated_data to handle it separately
-        password = validated_data.pop('password', None)
-        user = User(**validated_data)
-        if password:
-            user.set_password(password)
-        else:
-            raise serializers.ValidationError("Password is required for user creation.")
-        user.save()
-        return user
-
+        fields = ['id', 'email', 'first_name', 'last_name', 'phone_number']
 
 class MessageSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Message.
-    - Includes a SerializerMethodField 'short_content' for a truncated preview.
-    - Validates that message_body is not blank.
-    """
+    message_body = serializers.CharField()
+    sent_at = serializers.DateTimeField()
     sender = UserSerializer(read_only=True)
-    short_content = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = (
-            'message_id',
-            'conversation_id',
-            'sender',
-            'message_body',
-            'sent_at',
-            'short_content',
-        )
-
-    def get_short_content(self, obj):
-        # Return the first 50 characters of message_body (or entire body if shorter)
-        text = obj.message_body or ""
-        return text if len(text) <= 50 else text[:50] + "…"
-
-    def validate_message_body(self, value):
-        if not value or not value.strip():
-            raise serializers.ValidationError("Message body cannot be blank.")
-        return value
-
+        fields = ['message_id', 'message_body', 'sent_at', 'sender']
 
 class ConversationSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Conversation.
-    - 'participants' is a list of UserSerializer (read-only).
-    - 'messages' is nested as a list of MessageSerializer (read-only).
-    """
-    participants = UserSerializer(many=True, read_only=True)
-    messages = MessageSerializer(many=True, read_only=True)
+    users = UserSerializer(many=True, read_only=True)
+    messages = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
-        fields = (
-            'conversation_id',
-            'participants',
-            'created_at',
-            'messages',
-        )
+        fields = ['conversation_id', 'users', 'messages']
+
+    def get_messages(self, obj):
+        messages = obj.messages.all().order_by('sent_at')
+        return MessageSerializer(messages, many=True).data
+
+    def validate_users(self, value):
+        if not value or len(value) < 2:
+            raise serializers.ValidationError("A conversation must include at least two users.")
+        return value
