@@ -1,41 +1,43 @@
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from .models import Conversation, Message
+from .models import CustomUser, Conversation, Message
 
-User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
-    email = serializers.CharField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
+    """Serializer for the CustomUser model."""
     phone_number = serializers.CharField()
 
     class Meta:
-        model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'phone_number']
+        model = CustomUser
+        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'phone_number']
+
 
 class MessageSerializer(serializers.ModelSerializer):
-    message_body = serializers.CharField()
-    sent_at = serializers.DateTimeField()
+    """Serializer for the Message model."""
     sender = UserSerializer(read_only=True)
+    message_body = serializers.CharField()
 
     class Meta:
         model = Message
-        fields = ['message_id', 'message_body', 'sent_at', 'sender']
+        fields = ['message_id', 'sender', 'message_body', 'sent_at']
+
+    def validate_message_body(self, value):
+        """Raise error if message body is empty."""
+        if not value.strip():
+            raise serializers.ValidationError("Message body cannot be empty.")  # ✅ Correct usage
+        return value
+
 
 class ConversationSerializer(serializers.ModelSerializer):
-    users = UserSerializer(many=True, read_only=True)
+    """Serializer for Conversation model including nested messages and participants."""
+    participants = UserSerializer(many=True, read_only=True)
     messages = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
-        fields = ['conversation_id', 'users', 'messages']
+        fields = ['conversation_id', 'participants', 'created_at', 'messages']
 
     def get_messages(self, obj):
+        """Return serialized messages for a conversation."""
         messages = obj.messages.all().order_by('sent_at')
         return MessageSerializer(messages, many=True).data
 
-    def validate_users(self, value):
-        if not value or len(value) < 2:
-            raise serializers.ValidationError("A conversation must include at least two users.")
-        return value
