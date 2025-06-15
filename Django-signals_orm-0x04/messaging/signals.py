@@ -1,28 +1,21 @@
-from django.db.models.signals import post_save, pre_save
-from django.dispatch import receiver
-from .models import Message, Notification, MessageHistory
+from django.db import models
+from django.contrib.auth.models import User
 
-@receiver(pre_save, sender=Message)
-def log_message_edit(sender, instance, **kwargs):
-    if instance.id is None:
-        return  # Skip new messages
+class Message(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages')
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
 
-    try:
-        original = Message.objects.get(id=instance.id)
-        if original.content != instance.content:
-            MessageHistory.objects.create(
-                message=original,
-                old_content=original.content
-            )
-            instance.edited = True  # Mark message as edited
-    except Message.DoesNotExist:
-        pass
+    def __str__(self):
+        return f"From {self.sender} to {self.receiver} at {self.timestamp}"
 
 
-@receiver(post_save, sender=Message)
-def create_notification_on_message(sender, instance, created, **kwargs):
-    if created:
-        Notification.objects.create(
-            user=instance.receiver,
-            message=instance
-        )
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    message = models.ForeignKey(Message, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Notification for {self.user} - {self.message}"
