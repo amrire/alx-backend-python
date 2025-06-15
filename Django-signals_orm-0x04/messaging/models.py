@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from .managers import UnreadMessagesManager
 
 class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
@@ -14,6 +15,9 @@ class Message(models.Model):
         on_delete=models.CASCADE,
         related_name='replies'  # allows reverse access to replies
     )
+    read = models.BooleanField(default=False)
+    objects = models.Manager()  # Default manager
+    unread = UnreadMessagesManager()  # Custom manager
 
     def __str__(self):
         return f"{self.sender} to {self.receiver} at {self.timestamp}"
