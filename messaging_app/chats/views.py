@@ -5,11 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Conversation, Message, CustomUser
 from .serializers import ConversationSerializer, MessageSerializer
 from rest_framework.decorators import action
+from .permissions import IsParticipant, IsMessageSenderOrParticipant
+
 
 class ConversationViewSet(viewsets.ModelViewSet):
     queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsParticipant]
 
     def create(self, request, *args, **kwargs):
         """Create a new conversation with a list of participant user IDs"""
@@ -24,12 +26,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(conversation)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    def get_queryset(self):
+        return Conversation.objects.filter(participants=self.request.user)
 
 
 class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsMessageSenderOrParticipant]
 
     def create(self, request, *args, **kwargs):
         """Send a new message to an existing conversation"""
@@ -55,3 +60,6 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(message)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    def get_queryset(self):
+        return Message.objects.filter(conversation__participants=self.request.user)
