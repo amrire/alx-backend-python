@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# kurbeScript - Start Kubernetes cluster and verify setup
+# This script starts a local Kubernetes cluster using minikube
+
+echo "🚀 Starting Kubernetes cluster setup..."
+
+# Check if minikube is installed
+if ! command -v minikube &> /dev/null; then
+    echo "❌ Error: minikube is not installed. Please install minikube first."
+    echo "Visit: https://minikube.sigs.k8s.io/docs/start/"
+    exit 1
+fi
+
+# Check if kubectl is installed
+if ! command -v kubectl &> /dev/null; then
+    echo "❌ Error: kubectl is not installed. Please install kubectl first."
+    exit 1
+fi
+
+echo "✅ minikube and kubectl are installed"
+
+# Start minikube cluster
+echo "🔄 Starting minikube cluster..."
+minikube start
+
+# Wait for cluster to be ready
+echo "⏳ Waiting for cluster to be ready..."
+kubectl wait --for=condition=Ready nodes --all --timeout=300s
+
+# Verify cluster is running
+echo "🔍 Verifying cluster status..."
+kubectl cluster-info
+
+# Check cluster nodes
+echo "📋 Cluster nodes:"
+kubectl get nodes
+
+# Retrieve available pods in all namespaces
+echo "📦 Available pods in all namespaces:"
+kubectl get pods --all-namespaces
+
+# Get pods in default namespace
+echo "📦 Pods in default namespace:"
+kubectl get pods
+
+# Display cluster info
+echo "ℹ️  Cluster information:"
+echo "Cluster status: $(kubectl cluster-info | head -1)"
+echo "Kubernetes version: $(kubectl version --client --short)"
+echo "Minikube status: $(minikube status)"
+
+echo "✅ Kubernetes cluster setup complete!"
+echo "💡 You can now deploy applications to your cluster"

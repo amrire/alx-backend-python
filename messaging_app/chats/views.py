@@ -1,65 +1,41 @@
-from django.shortcuts import render
 from rest_framework import viewsets, status
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Conversation, Message, CustomUser
-from .serializers import ConversationSerializer, MessageSerializer
-from rest_framework.decorators import action
-from .permissions import IsParticipant, IsMessageSenderOrParticipant
-
-
-class ConversationViewSet(viewsets.ModelViewSet):
-    queryset = Conversation.objects.all()
-    serializer_class = ConversationSerializer
-    permission_classes = [IsAuthenticated, IsParticipant]
-
-    def create(self, request, *args, **kwargs):
-        """Create a new conversation with a list of participant user IDs"""
-        participant_ids = request.data.get("participants", [])
-        if not participant_ids:
-            return Response({"error": "participants field is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        conversation = Conversation.objects.create()
-        participants = CustomUser.objects.filter(id__in=participant_ids)
-        conversation.participants.set(participants)
-        conversation.save()
-
-        serializer = self.get_serializer(conversation)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
-    def get_queryset(self):
-        return Conversation.objects.filter(participants=self.request.user)
-
+from rest_framework.response import Response
+from rest_framework.exceptions import APIException
+from .models import Message, Conversation
+from .serializers import MessageSerializer
+from .permissions import IsParticipantOfConversation
 
 class MessageViewSet(viewsets.ModelViewSet):
-    queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [IsAuthenticated, IsMessageSenderOrParticipant]
+    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
 
-    def create(self, request, *args, **kwargs):
-        """Send a new message to an existing conversation"""
-        conversation_id = request.data.get("conversation")
-        content = request.data.get("content")
+    def get_queryset(self):
+        conversation_id = self.request.query_params.get('conversation_id')
 
-        if not conversation_id or not content:
-            return Response(
-                {"error": "Both conversation and content are required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if not conversation_id:
+            return Message.objects.none()
 
         try:
             conversation = Conversation.objects.get(id=conversation_id)
         except Conversation.DoesNotExist:
-            return Response({"error": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Message.objects.none()
 
-        message = Message.objects.create(
-            conversation=conversation,
-            sender=request.user,
-            content=content
-        )
+        if self.request.user not in conversation.participants.all():
+            raise APIException(
+                detail="You are not a participant of this conversation.",
+                code=status.HTTP_403_FORBIDDEN
+            )
 
-        serializer = self.get_serializer(message)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
-    def get_queryset(self):
-        return Message.objects.filter(conversation__participants=self.request.user)
+        return Message.objects.filter(conversation=conversation)
+
+    def perform_create(self, serializer):
+        conversation = serializer.validated_data['conversation']
+
+        if self.request.user not in conversation.participants.all():
+            raise APIException(
+                detail="You are not a participant of this conversation.",
+                code=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer.save(user=self.request.user)

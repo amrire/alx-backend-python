@@ -1,31 +1,35 @@
-from django.db import models
+import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+class User(AbstractUser):
+    user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
 
-class CustomUser(AbstractUser):
-    """Extend the default user model if needed later (e.g., avatar, status)."""
-    pass
+    # Optional: override username to be email, or keep as is
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']  # or ['first_name', 'last_name']
+
+    # AbstractUser already has first_name, last_name, password fields
 
     def __str__(self):
-        return self.username
-   
-    
+        return self.email
+
 class Conversation(models.Model):
-    """Model representing a conversation between multiple users."""
-    participants = models.ManyToManyField('CustomUser', related_name='conversations')
+    conversation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    participants = models.ManyToManyField(User, related_name='conversations')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Conversation {self.id} - Participants: {', '.join(user.username for user in self.participants.all())}"
-
+        return f"Conversation {self.conversation_id}"
 
 class Message(models.Model):
-    """Model representing a message sent within a conversation."""
+    message_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
-    sender = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='messages_sent')
-    content = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    message_body = models.TextField()
+    sent_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"From {self.sender.username} in Conversation {self.conversation.id}"
+        return f"Message {self.message_id} from {self.sender.email}"

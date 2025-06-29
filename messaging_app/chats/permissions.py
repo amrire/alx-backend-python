@@ -1,21 +1,24 @@
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework import permissions
 
-class IsParticipant(BasePermission):
+class IsParticipantOfConversation(permissions.BasePermission):
     """
-    Allow access only to conversation participants.
+    Allows only participants of a conversation to send, view, update, or delete messages.
     """
+
+    def has_permission(self, request, view):
+        # Only allow authenticated users to proceed
+        return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
-        return request.user in obj.participants.all()
+        # Get the conversation object (if obj is a message, get obj.conversation)
+        conversation = getattr(obj, 'conversation', obj)
 
+        # Check if user is part of the conversation participants
+        is_participant = request.user in conversation.participants.all()
 
-class IsMessageSenderOrParticipant(BasePermission):
-    """
-    Allow message access to the sender or participants of the conversation.
-    """
+        # Allow only participants to read, send, update, or delete messages
+        if request.method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']:
+            return is_participant
 
-    def has_object_permission(self, request, view, obj):
-        return (
-            obj.sender == request.user or 
-            request.user in obj.conversation.participants.all()
-        )
+        # Deny all other methods
+        return False
